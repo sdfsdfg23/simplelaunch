@@ -1,76 +1,72 @@
 /**************************************
  * server.js
  **************************************/
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const cors = require("cors");
-const multer = require("multer");
-const fetch = require("node-fetch"); // ← Yeni satır
 
-// 🚨 Telegram ayarları
-const BOT_TOKEN = "7603337087:AAFsvETD3OIQRAy68IayHyZKgiZpvaUdmew";
-const CHAT_ID   = "7425618486";
+const express = require("express");
+const fs      = require("fs");
+const path    = require("path");
+const cors    = require("cors");
+const multer  = require("multer");
+const fetch   = require("node-fetch");
+
+// 🔐 Telegram token ve chat ID’yi ENV’den oku
+const BOT_TOKEN = process.env.TELEGRAM_TOKEN;
+const CHAT_ID   = process.env.TELEGRAM_CHAT_ID;
 
 // -- Firebase Admin SDK import --
-const admin = require("firebase-admin");
-const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+const admin           = require("firebase-admin");
+const serviceAccount  = JSON.parse(process.env.FIREBASE_KEY);
 
 // Initialize Firebase App
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// Get Firestore reference
-const db = admin.firestore();
-
+const db  = admin.firestore();
 const app = express();
+
 app.use(express.json());
 app.use(cors());
 
-// Check and create necessary folders
+// Ensure folders exist
 const ordersFolder = "public/orders";
 const imagesFolder = path.join(ordersFolder, "images");
 if (!fs.existsSync(ordersFolder)) fs.mkdirSync(ordersFolder, { recursive: true });
 if (!fs.existsSync(imagesFolder)) fs.mkdirSync(imagesFolder, { recursive: true });
 
-// Multer configuration (only accepts JPG and PNG)
+// Multer setup
 const storage = multer.diskStorage({
   destination: imagesFolder,
-  filename: (req, file, cb) => {
-    const uniqueName = `${req.body.walletAddress}_${Date.now()}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  },
+  filename: (req, file, cb) =>
+    cb(null, `${req.body.walletAddress}_${Date.now()}${path.extname(file.originalname)}`),
 });
 const fileFilter = (req, file, cb) => {
-  const fileTypes = /jpeg|jpg|png/;
-  const isValid = fileTypes.test(file.mimetype) && fileTypes.test(path.extname(file.originalname).toLowerCase());
-  cb(null, isValid);
+  const valid = /jpeg|jpg|png/.test(file.mimetype) &&
+                /jpeg|jpg|png/.test(path.extname(file.originalname).toLowerCase());
+  cb(null, valid);
 };
 const upload = multer({ storage, fileFilter });
 
-// ✅ Health check endpoint
-app.get("/", (req, res) => {
-  res.send("✅ Backend & Telegram bot çalışıyor! POST /save-order ile işlem yapabilirsiniz.");
+// Health-check
+app.get("/", (_req, res) => {
+  res.send("✅ Backend & Telegram bot çalışıyor!");
 });
 
-// 📦 Save order + Telegram bildirim
+// Save-order + Telegram notification
 app.post("/save-order", upload.single("image"), async (req, res) => {
-  // Zorunlu alanlar
+  // Validate
   if (!req.file && !req.body.imageLink) {
-    return res.status(400).send("boşluklar var!");
+    return res.status(400).send("Boş alanlar var!");
   }
   const { walletAddress, name, symbol, supply, decimals, description, imageLink } = req.body;
   if (!walletAddress || !name || !symbol || !supply || !decimals || !description || !imageLink) {
     return res.status(400).send("Eksik zorunlu alanlar var.");
   }
 
-  // Eğer imageLink varsa, dosyayı sil
-  if (req.file && imageLink) {
-    fs.unlink(req.file.path, () => {});
-  }
+  // If file uploaded but imageLink used, delete the file
+  if (req.file && imageLink) fs.unlink(req.file.path, () => {});
 
-  // Firestore'a kaydedilecek veri
+  // Prepare Firestore data
   const orderData = {
     walletAddress,
     name,
@@ -83,10 +79,10 @@ app.post("/save-order", upload.single("image"), async (req, res) => {
   };
 
   try {
-    // Firestore kaydı
-    const docRef = await db.collection("orders").add(orderData);
+    // 1) Save to Firestore
+    await db.collection("orders").add(orderData);
 
-    // Telegram bildirimi
+    // 2) Send Telegram message
     const text = `
 🆕 *Yeni Sipariş!*
 • Ad: ${orderData.name}
@@ -94,7 +90,7 @@ app.post("/save-order", upload.single("image"), async (req, res) => {
 • Cüzdan: ${orderData.walletAddress}
 • Zaman: ${orderData.time}
 `;
-    await fetch(`https://api.telegram.org/bot${7603337087:AAFsvETD3OIQRAy68IayHyZKgiZpvaUdmew}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -106,14 +102,14 @@ app.post("/save-order", upload.single("image"), async (req, res) => {
 
     console.log("✅ Sipariş kaydedildi ve Telegram bildirimi gönderildi!");
     return res.send("Sipariş başarıyla kaydedildi (Firestore + Telegram)!");
-  } catch (error) {
-    console.error("❌ Hata:", error);
+  } catch (err) {
+    console.error("❌ Hata:", err);
     return res.status(500).send("Bir hata oluştu. Lütfen tekrar deneyin.");
   }
 });
 
-// 🟢 Start server
+// Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`✅ Server http://localhost:${PORT} üzerinde çalışıyor.`);
-});
+app.listen(PORT, () =>
+  console.log(`✅ Server http://localhost:${PORT} üzerinde çalışıyor.`)
+);
