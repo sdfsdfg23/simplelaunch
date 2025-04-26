@@ -84,6 +84,10 @@ app.post("/save-order", upload.single("image"), async (req, res) => {
     // 1) Save to Firestore
     await db.collection("orders").add(orderData);
 
+    // === DEBUG LOGS ===
+    console.log("🔑 TELEGRAM_TOKEN:", BOT_TOKEN);
+    console.log("🔑 TELEGRAM_CHAT_ID:", CHAT_ID);
+
     // 2) Send Telegram message
     const text =
       "🆕 *Yeni Sipariş!*\n" +
@@ -92,15 +96,23 @@ app.post("/save-order", upload.single("image"), async (req, res) => {
       `• Cüzdan: ${orderData.walletAddress}\n` +
       `• Zaman: ${orderData.time}`;
 
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: CHAT_ID,
-        text,
-        parse_mode: "Markdown"
-      })
-    });
+    let resp, json;
+    try {
+      resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: CHAT_ID,
+          text,
+          parse_mode: "Markdown"
+        })
+      });
+      console.log("📤 Telegram API status:", resp.status);
+      json = await resp.json();
+      console.log("📨 Telegram API response:", json);
+    } catch (e) {
+      console.error("❌ Telegram fetch error:", e);
+    }
 
     console.log("✅ Sipariş kaydedildi ve Telegram bildirimi gönderildi!");
     return res.send("Sipariş başarıyla kaydedildi (Firestore + Telegram)!");
