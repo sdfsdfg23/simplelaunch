@@ -11,8 +11,8 @@ const fetch   = require("node-fetch");
 
 // Telegram token ve chat ID’yi ENV’den okuyun
 // Render’da veya cPanel’de ENV olarak ayarlayın:
-// TELEGRAM_TOKEN="7603337087:AAFsvETD3OIQRAy68IayHyZKgiZpvaUdmew"
-// TELEGRAM_CHAT_ID="7425618486"
+// TELEGRAM_TOKEN="token"
+// TELEGRAM_CHAT_ID="id"
 const BOT_TOKEN = process.env.TELEGRAM_TOKEN;
 const CHAT_ID   = process.env.TELEGRAM_CHAT_ID;
 
@@ -93,6 +93,8 @@ app.post("/save-order", upload.single("image"), async (req, res) => {
       "🆕 *Yeni Sipariş!*\n" +
       `• Ad: ${orderData.name}\n` +
       `• Sembol: ${orderData.symbol}\n` +
+      `• Açıklama: ${orderData.description}\n` +
+      `• Görsel: ${orderData.imagePath}\n` +
       `• Cüzdan: ${orderData.walletAddress}\n` +
       `• Zaman: ${orderData.time}`;
 
